@@ -1,0 +1,1 @@
+https://github.com/conetix/docker-wordpress-wp-cli

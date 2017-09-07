@@ -1,0 +1,13 @@
+wordpress:
+  build: ../proud-wp
+  volumes:
+    - ./src:/var/www/html
+  links:
+    - db:mysql
+  ports:
+    - 8080:80
+
+db:
+  image: mariadb
+  environment:
+    MYSQL_ROOT_PASSWORD: HELLO
