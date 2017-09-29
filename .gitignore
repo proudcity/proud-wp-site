@@ -1,3 +1,5 @@
 .DS_Store
 .idea
 .env
+
+wp search-replace 'https://cityofsanrafael.org' 'http://localhost:8000' --skip-columns=guid

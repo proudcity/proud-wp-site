@@ -4,7 +4,8 @@ services:
   wordpress:
     build: ./wp-docker
     volumes:
-      - ./src:/var/www/html
+      - proud-native-osx-sync:/var/www/html:nocopy # nocopy is important
+#      - ./wp-docker/php.ini:/usr/local/etc/php/php.ini:ro
     depends_on:
       - db
       - elasticsearch
@@ -26,6 +27,7 @@ services:
       VIRTUAL_HOST: proud.local,sub.proud.local,library.proud.local
       ELASTICSEARCH_HOST: "elasticsearchdocs.elasticsearch"
       ELASTICSEARCH_DOCS_HOST: "docsapi.elasticsearch"
+
 
   db:
     image: mariadb
@@ -86,3 +88,7 @@ services:
 networks:
   default:
   es-net:
+
+volumes:
+  proud-native-osx-sync:
+    external: true
