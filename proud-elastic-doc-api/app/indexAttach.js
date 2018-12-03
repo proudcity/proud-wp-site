@@ -39,6 +39,20 @@ function createRedisQ() {
 }
 
 /**
+ * Gets a doc from elastic
+ */
+function getIndexedDoc(task) {
+  return getElastic(task.indexedPath)
+    .then((result) => {
+      console.log(result);
+      if (!result.found || !result._source) {
+        return null;
+      }
+      return result._source;
+    });
+}
+
+/**
  * Requests doc, encodes to base64
  */
 function getEncodedDoc(url) {
@@ -74,24 +88,87 @@ function getEncodedDoc(url) {
  * Attaches base64 encoding to post attachments
  * @TODO deal with multple docs?
  */
-function attachEncodedDocs(task) {
+function attachEncodedDocs(task, indexed) {
+  /**
+   * Gets the saved attachment data for a given file name
+   */
+  const getIndexedData = (attachment) => {
+    if (!indexed || !indexed.attachments || !indexed.attachments.length) {
+      return null;
+    }
+    return indexed.attachments
+      .filter(item => item.file === attachment)
+      .reduce((prev, curr) => curr || prev, null);
+  };
+
   return new Promise((resolve, reject) => {
     if (_.has(task, 'post.attachments') && task.post.attachments.length) {
-      task.post.attachments.forEach((attachment, index) => {
-        console.log('Fetching and encoding: ' + attachment);
-        // Get encoded
-        getEncodedDoc(attachment).then((encoded) => {
-          console.log('Encode success');
-          task.post.attachments[index] = { data: encoded };
+      // Run through attachments, and either use existing or encode doc
+      const promises = task.post.attachments.map((attachment, index) => 
+        new Promise((resolveInner) => {
+          // Already have this doc?
+          const indexedData = getIndexedData(attachment);
+          if (indexedData) {
+            console.log('Doc already exists in elastic: ' + attachment);
+            task.post.attachments[index] = indexedData;
+            resolveInner();
+            return;
+          }
+
+          // Get encoded
+          console.log('Fetching and encoding: ' + attachment);
+          getEncodedDoc(attachment).then((encoded) => {
+            console.log('Encode success');
+            task.post.attachments[index] = { file: attachment, data: encoded };
+            resolveInner();
+          }).catch((error, response) => {
+            console.log(error);
+            delete task.post.attachments[index];
+            resolveInner();
+          });
+        })
+      );
+
+      Promise.all(promises)
+        .then(() => {
+          console.log(task);
+          // Errors occurred
+          if (!task.post.attachments.length) {
+            reject('Post no longer has any attachments');
+            return;
+          }
           resolve(task.post);
-        }).catch((error, response) => {
+        })
+        .catch((error) => {
           console.log(error);
-          reject('Fetching and encoding failed');
+          reject(error.message);
         });
-      });
     } else {
       reject('No attachments');
     }
+  });
+}
+
+/**
+ * Sends to elastic
+ */
+function getElastic(path) {
+  const url = `${config.elasticsearch}:9200/${path}`;
+  return new Promise((resolve, reject) => {
+    return request({
+      method: 'GET',
+      uri: url,
+      json: true,
+    }, function (error, response, body) {
+      if (!error && response && response.statusCode === 200) {
+        return resolve(body);
+      }
+      if (body && body.error) {
+        console.log(body.error);
+      }
+      console.log(error);
+      return reject('Failed getting from elastic');
+    });
   });
 }
 
@@ -108,6 +185,7 @@ function sendElastic(path, post) {
       json: true,
       body: post,
     }, function (error, response, body) {
+      console.log(body);
       if (!error && response && response.statusCode === 200) {
         return resolve(body);
       }
@@ -142,17 +220,15 @@ function postToElastic(message) {
   }
 
   // Run
-  attachEncodedDocs(task).then((post) => {
-    sendElastic(task.path, post).then(() => {
-      console.log(`Success post ID: ${post.ID}, to path: ${task.path}`);
-      processing = false;
-      nextInQueue();
-    }).catch((reason) => {
-      erroring(reason);
-    });
-  }).catch((reason) => {
-    erroring(reason);
-  });
+  getIndexedDoc(task).then((indexed) => {
+    attachEncodedDocs(task, indexed).then((post) => {
+      sendElastic(task.path, post).then(() => {
+        console.log(`Success post ID: ${post.ID}, to path: ${task.path}`);
+        processing = false;
+        nextInQueue();
+      }).catch(erroring);
+    }).catch(erroring);
+  }).catch((error) => erroring(error.message));
 }
 
 /**

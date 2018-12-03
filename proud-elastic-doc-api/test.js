@@ -40,31 +40,38 @@ function isWorkin() {
   return working;
 }
 
+var index = 'san-rafael-ca';
+
+
 var timout = 500;
 
 for(let i = 1; i < 30; i++) {
-
+  var basepath = `${index}/post/${i}`;
+      var path = `${index}/post/${i}?pipeline=${index}-attachment`;
   setTimeout(() => {
     const json = { 
-      path: `proud.local/post/${i}/_update?pipeline=proud.local-attachment`,
+      indexedPath: basepath, 
+      path: `${basepath}?pipeline=${index}-attachment`,
       post: { 
         ID: i,
-        attachments: [ 'https://storage.googleapis.com/proudcity/localhosttest/uploads/text-1-1.docx' ]
+        attachments: [ 'https://storage.googleapis.com/proudcity/localhosttest/uploads/2018/11/Awards.pdf', 'https://storage.googleapis.com/proudcity/localhosttest/uploads/text-1-1.docx' ]
       }
     };
+    console.log(json);
     makethecall(json);
   }, (timout * i));
-
 }
 
 var timout2 = 500; 
 
 setTimeout(() => {
   for(let i = 1; i < 30; i++) {
-
+    
     setTimeout(() => {
+      var basepath = `${index}/post/${i}`;
+      var path = `${index}/post/${i}?pipeline=${index}-attachment`;
       const json = { 
-        path: `proud.local/post/${i}/_update?pipeline=proud.local-attachment`,
+        path: path,
         post: { 
           ID: i,
           attachments: [ 'https://storage.googleapis.com/proudcity/localhosttest/uploads/text-1-1.docx' ]
