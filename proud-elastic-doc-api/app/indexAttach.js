@@ -42,9 +42,10 @@ function createRedisQ() {
  * Gets a doc from elastic
  */
 function getIndexedDoc(task) {
-  return getElastic(task.indexedPath)
+  const path = `${task.indexedPath}?_source_includes=attachments&_source_excludes=*data,*content`;
+  
+  return getElastic(path)
     .then((result) => {
-      console.log(result);
       if (!result.found || !result._source) {
         return null;
       }
@@ -103,6 +104,9 @@ function attachEncodedDocs(task, indexed) {
 
   return new Promise((resolve, reject) => {
     if (_.has(task, 'post.attachments') && task.post.attachments.length) {
+      // Do we even need to post?
+      let newAttachment = false;
+
       // Run through attachments, and either use existing or encode doc
       const promises = task.post.attachments.map((attachment, index) => 
         new Promise((resolveInner) => {
@@ -118,8 +122,10 @@ function attachEncodedDocs(task, indexed) {
           // Get encoded
           console.log('Fetching and encoding: ' + attachment);
           getEncodedDoc(attachment).then((encoded) => {
-            console.log('Encode success');
+            console.log('Encode success: ' + attachment);
             task.post.attachments[index] = { file: attachment, data: encoded };
+            // Set flag
+            newAttachment = true;
             resolveInner();
           }).catch((error, response) => {
             console.log(error);
@@ -131,11 +137,12 @@ function attachEncodedDocs(task, indexed) {
 
       Promise.all(promises)
         .then(() => {
-          console.log(task);
-          // Errors occurred
-          if (!task.post.attachments.length) {
-            reject('Post no longer has any attachments');
-            return;
+          if (!newAttachment) {
+            // Nothing new
+            return reject('Post has no new attachments');
+          } else if (!task.post.attachments.length) {
+            // Errors occurred
+            return reject('After encoding, post no longer has any attachments');
           }
           resolve(task.post);
         })
@@ -154,6 +161,7 @@ function attachEncodedDocs(task, indexed) {
  */
 function getElastic(path) {
   const url = `${config.elasticsearch}:9200/${path}`;
+
   return new Promise((resolve, reject) => {
     return request({
       method: 'GET',
@@ -163,10 +171,11 @@ function getElastic(path) {
       if (!error && response && response.statusCode === 200) {
         return resolve(body);
       }
-      if (body && body.error) {
-        console.log(body.error);
+      if (error) {
+        console.log(error);
+      } else {
+        console.log(body);
       }
-      console.log(error);
       return reject('Failed getting from elastic');
     });
   });
@@ -176,23 +185,24 @@ function getElastic(path) {
  * Sends to elastic
  */
 function sendElastic(path, post) {
-  const url = `${config.elasticsearch}:9200/${path}`; 
+  const url = `${config.elasticsearch}:9200/${path}`;
   console.log(`Attemping to index post ID: ${post.ID}, to url: ${url}`);
+  
   return new Promise((resolve, reject) => {
     request({
-      method: 'PUT', 
+      method: 'PUT',
       uri: url,
       json: true,
       body: post,
     }, function (error, response, body) {
-      console.log(body);
       if (!error && response && response.statusCode === 200) {
         return resolve(body);
       }
-      if (body && body.error) {
-        console.log(body.error);
+      if (error) {
+        console.log(error);
+      } else {
+        console.log(body);
       }
-      console.log(error);
       return reject('Failed sending to elastic');
     });
   });
@@ -248,6 +258,14 @@ function nextInQueue() {
         processing = false;
         return
       }
+      // List how many remaining
+      rsmq.getQueueAttributes({ qname: name }, function (err, resp) {
+        if ( err ) {
+          return;
+        }
+
+        console.log('Queue msgs remaining: ' + resp.msgs);
+      });
       // Post it
       postToElastic(message);
     });

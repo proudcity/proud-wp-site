@@ -1,6 +1,6 @@
 # This Dockerfile uses the stock node container for Node.js, release 8.X (latest)
 
-FROM node:8
+FROM node:8-jessie
 
 # install ssh for npm git and curl
 RUN apt-get update && apt-get -y install ssh curl libc6 libssl1.0.0 libncurses5 libtinfo5 \
