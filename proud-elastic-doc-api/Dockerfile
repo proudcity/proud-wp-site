@@ -16,6 +16,7 @@ ENV PATH=$PATH:/home/node/.npm-global/bin
 ENV NODE_ENV="production"
 
 # allow node user to bind to port 80 https://gist.github.com/firstdoit/6389682
+# note this doesn't work beyond Debian jesse
 RUN setcap 'cap_net_bind_service=+ep' `which node`
 
 RUN npm install -g forever
